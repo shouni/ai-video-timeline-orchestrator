@@ -172,9 +172,9 @@ for i, cut := range recipe.Cuts {
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ Architecture - Provider-neutral AI Video Timeline Orchestration
 
-詳細は [`docs/architecture.md`](docs/architecture.md) を参照してください。
+詳細版は [`docs/architecture.md`](docs/architecture.md) に配置しています。
 
 ### Flow
 
@@ -196,7 +196,18 @@ sequenceDiagram
     Timeline->>Publish: Save updated recipe metadata
 ```
 
-### Boundary Design
+### Step Details
+
+1. `Application` が creative brief または serialized recipe を読み込みます。
+2. `Recipe Loader` が `VideoRecipe` として title、theme、mood、tempo、cuts を復元します。
+3. `Timeline Normalizer` が sections や cuts を、生成しやすい順序付き timeline に整えます。
+4. `Keyframe Runner` が必要に応じて `KeyframeReference` を作成または添付します。
+5. `Video Runner` が `VideoRequest` を受け取り、provider-specific な動画生成処理を実行します。
+6. `Timeline` は `VideoResponse` から `GeneratedVideoRef` / `GeneratedVideoURL` を更新します。
+7. 次の cut には前 cut の `GeneratedVideoRef` を `PreviousVideoRef` として渡します。
+8. `Metadata Publisher` が更新済みの `VideoRecipe` を保存します。
+
+### Public Boundary
 
 公開 API は、安定したドメイン概念だけを扱います。
 
@@ -209,6 +220,16 @@ sequenceDiagram
 
 実際の動画生成 API に必要な認証、HTTP payload、polling、rate limit、storage、retry policy は、別 adapter または private package に隔離する想定です。
 
+### Continuity Strategy
+
+カット間の連続性は、provider-specific な詳細ではなく reference chaining として表現します。
+
+```go
+req := orchestrator.VideoRequestFromCut(cut, previousVideoRef)
+```
+
+`previousVideoRef` が指定されている場合は、それを優先して `VideoRequest.PreviousVideoRef` に設定します。指定がない場合は、`VideoCut.PreviousVideoRef` を fallback として使います。
+
 ### Resume Strategy
 
 生成状態は `CutStatus` で表現します。
@@ -218,6 +239,25 @@ sequenceDiagram
 * `failed`: アプリケーション側の方針に従って再試行するカット
 
 このリポジトリはフィールドと境界を定義するのみで、本番用の queue、retry、resume 実装は含みません。
+
+### Adapter Implementation Pattern
+
+本番 adapter は `VideoRunner` を実装します。
+
+```go
+type ProviderVideoRunner struct {
+    // client, storage, logger, retry policy, and configuration live here.
+}
+
+func (r *ProviderVideoRunner) Run(ctx context.Context, req orchestrator.VideoRequest) (*orchestrator.VideoResponse, error) {
+    // 1. Convert provider-neutral request into provider-specific payload.
+    // 2. Submit generation request.
+    // 3. Poll or wait for completion.
+    // 4. Store or normalize output reference.
+    // 5. Return provider-neutral response.
+    return &orchestrator.VideoResponse{}, nil
+}
+```
 
 ---
 
@@ -238,27 +278,6 @@ ai-video-timeline-orchestrator/
 ├── go.mod
 ├── LICENSE
 └── README.md
-```
-
----
-
-## 🤝 依存関係 (Dependencies)
-
-この公開サンプルは、Go 標準ライブラリのみで動作します。
-
-* [Go 1.22+](https://golang.org/)
-* `context` - request lifecycle / cancellation
-* `fmt` - mock response generation
-* `testing` - package tests
-
-本番 adapter を追加する場合は、利用する動画生成 API、storage、queue、observability、secret management に応じて依存関係を private package 側に追加してください。
-
----
-
-## 🧪 Test
-
-```bash
-go test ./...
 ```
 
 ---
