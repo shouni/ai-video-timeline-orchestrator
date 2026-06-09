@@ -1,109 +1,283 @@
-# AI Video Timeline Orchestrator
+# 🎬 AI Video Timeline Orchestrator
 
-A reference implementation concept for turning structured music/story recipes into an asynchronous AI video generation timeline.
+[![Language](https://img.shields.io/badge/Language-Go-blue)](https://golang.org/)
+[![Go Version](https://img.shields.io/badge/Go-1.22-00ADD8)](https://golang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Status](https://img.shields.io/badge/Status-Reference%20Implementation-brightgreen)](#)
 
-This repository demonstrates the public-facing architecture only. It intentionally uses mock runners and generic interfaces so that service-specific adapters, production prompts, deployment settings, and proprietary workflow logic can remain private.
+## 🚀 概要 (About) - 音楽・ストーリー設計を動画生成タイムラインへ変換するオーケストレーター
 
-## What It Does
+**AI Video Timeline Orchestrator** は、音楽やストーリーをもとにした構造化レシピを、AI動画生成向けのタイムラインへ変換するための Go 製リファレンス実装です。
 
-The project models a pipeline that converts a music-oriented creative brief into a sequence of video cuts:
+単なるサンプルコードではなく、「**音楽起点のカット設計**」「**前カット出力を次カットへ引き継ぐ連続性管理**」「**生成済みメタデータによる再開・リトライ設計**」「**プロバイダー非依存の Adapter Boundary**」といった、AI動画生成ワークフローで実用上必要になる設計要素を、公開可能な最小構成として整理しています。
 
-1. Load or generate a structured `VideoRecipe`.
-2. Normalize sections into timestamped cuts.
-3. Generate or attach keyframe references for each cut.
-4. Submit each cut to a video runner.
-5. Carry the previous output reference into the next cut.
-6. Publish updated metadata for resume/retry workflows.
+このリポジトリは、特定の動画生成サービスに依存しない公開用アーキテクチャを示すことを目的としています。実運用で使う provider-specific adapter、production prompt、クラウド設定、キュー worker、認証情報、独自の生成戦略は含めていません。
 
-The public sample focuses on the contracts and data flow, not on any specific provider implementation.
+---
 
-## Core Concepts
+## ✨ 主な特徴 (Features)
 
-### Music-Driven Timeline
+* **🎼 Music-Driven Timeline**:
+  * `VideoRecipe` に含まれる tempo、mood、audio cue、cut-level prompt をもとに、動画生成に渡しやすいカット単位のタイムラインを表現します。
+* **🎞️ Cut-Based Video Workflow**:
+  * 各 `VideoCut` は duration、visual prompt、audio reference、keyframe reference、seed、character ID を保持し、1カットずつ生成処理へ渡せます。
+* **🔁 Continuity Chaining**:
+  * `PreviousVideoRef` と `GeneratedVideoRef` により、前カットの出力を次カットの入力として扱う設計をサポートします。
+* **🧩 Provider-Neutral Adapter Boundary**:
+  * 動画生成処理は `VideoRunner` インターフェースに分離。Gemini、Veo、Runway、Luma、独自バックエンドなどの実装は adapter として差し替えられます。
+* **🧭 Resumable Metadata Model**:
+  * `pending` / `generated` / `failed` の `CutStatus` を使い、生成済みカットのスキップや失敗カットの再処理をアプリケーション側で構成できます。
+* **🧪 Deterministic Mock Runner**:
+  * 公開サンプルには `MockVideoRunner` を同梱し、外部APIなしで request/response の流れとテストを確認できます。
+* **🛡️ Public-Safe Architecture**:
+  * 本番プロンプト、プロバイダー固有 payload、認証、bucket path、queue worker、retry policy などの秘匿すべき要素を含めない構成です。
 
-A recipe contains musical timing, mood, sections, and cut-level visual intent. The orchestrator normalizes this into a timeline that downstream tools can process deterministically.
+---
 
-### Cut Consistency
+## 🧭 Public API
 
-Each cut can carry a stable character identifier, seed, keyframe reference, audio cue, and previous video reference. These fields allow an implementation to preserve continuity across generated clips.
+```go
+// 1つの動画生成バックエンドを表す adapter boundary
+type VideoRunner interface {
+    Run(ctx context.Context, req VideoRequest) (*VideoResponse, error)
+}
 
-### Adapter Boundary
+// 生成後の recipe metadata を保存する publisher boundary
+type MetadataPublisher interface {
+    Publish(ctx context.Context, recipe VideoRecipe) error
+}
 
-Video generation is represented by a `VideoRunner` interface. Production implementations can call any backend, while this repository includes only a mock runner.
-
-### Resumable Metadata
-
-Generated cuts can be marked as complete with output URLs. A later run can skip completed cuts and continue from the last available video reference.
-
-## Repository Layout
-
-```text
-.
-├── docs/
-│   └── architecture.md
-├── examples/
-│   └── recipe.example.json
-└── pkg/
-    └── orchestrator/
-        ├── interfaces.go
-        ├── mock_runner.go
-        └── types.go
+// VideoCut から provider-neutral な VideoRequest を生成
+VideoRequestFromCut(cut VideoCut, previousVideoRef string) VideoRequest
 ```
 
-## Example Recipe
+### Core Types
 
-See [`examples/recipe.example.json`](examples/recipe.example.json).
+```go
+type VideoRecipe struct {
+    Title    string
+    Theme    string
+    Mood     string
+    TempoBPM int
+    Cuts     []VideoCut
+}
+
+type VideoCut struct {
+    Index             int
+    DurationSec       float64
+    AudioCue          string
+    AudioReference    string
+    VisualPrompt      string
+    KeyframeReference string
+    CharacterID       string
+    Seed              uint32
+    PreviousVideoRef  string
+    GeneratedVideoRef string
+    GeneratedVideoURL string
+    Status            CutStatus
+}
+```
+
+---
+
+## 🚀 Quick Start
+
+### 1. Mock Runner で1カットを生成する
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+
+    "github.com/example/ai-video-timeline-orchestrator/pkg/orchestrator"
+)
+
+func main() {
+    ctx := context.Background()
+    runner := orchestrator.MockVideoRunner{}
+
+    recipe := orchestrator.VideoRecipe{
+        Title:    "Neon Rain",
+        Theme:    "finding clarity in a noisy city",
+        Mood:     "cinematic synthwave, emotional, luminous",
+        TempoBPM: 120,
+        Cuts: []orchestrator.VideoCut{
+            {
+                Index:        1,
+                DurationSec:  6,
+                AudioCue:     "soft synth pulse begins at the intro",
+                VisualPrompt: "a lone protagonist walks through reflective neon rain, close-up on determined eyes",
+                CharacterID:  "main",
+                Seed:         42,
+            },
+        },
+    }
+
+    req := orchestrator.VideoRequestFromCut(recipe.Cuts[0], "")
+    res, err := runner.Run(ctx, req)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    log.Printf("generated cut=%d ref=%s url=%s", res.CutIndex, res.VideoRef, res.VideoURL)
+}
+```
+
+### 2. 前カットの出力を次カットへ引き継ぐ
+
+```go
+previousRef := ""
+
+for i, cut := range recipe.Cuts {
+    req := orchestrator.VideoRequestFromCut(cut, previousRef)
+
+    res, err := runner.Run(ctx, req)
+    if err != nil {
+        recipe.Cuts[i].Status = orchestrator.CutStatusFailed
+        continue
+    }
+
+    recipe.Cuts[i].GeneratedVideoRef = res.VideoRef
+    recipe.Cuts[i].GeneratedVideoURL = res.VideoURL
+    recipe.Cuts[i].Status = orchestrator.CutStatusGenerated
+
+    previousRef = res.VideoRef
+}
+```
+
+### 3. Example Recipe を使う
+
+`examples/recipe.example.json` には、音楽的な mood / tempo / audio cue と、カット単位の visual prompt を含む最小レシピを配置しています。
 
 ```json
 {
   "title": "Neon Rain",
+  "theme": "finding clarity in a noisy city",
   "mood": "cinematic synthwave, emotional, luminous",
   "tempo_bpm": 120,
   "cuts": [
     {
       "index": 1,
       "duration_sec": 6,
-      "audio_cue": "intro pulse begins",
-      "visual_prompt": "a lone protagonist walks through reflective neon rain"
+      "audio_cue": "soft synth pulse begins at the intro",
+      "visual_prompt": "a lone protagonist walks through reflective neon rain, close-up on determined eyes",
+      "character_id": "main",
+      "seed": 42
     }
   ]
 }
 ```
 
-## Minimal Usage
+---
 
-```go
-runner := orchestrator.MockVideoRunner{}
-recipe := orchestrator.VideoRecipe{
-    Title:    "Neon Rain",
-    TempoBPM: 120,
-    Cuts: []orchestrator.VideoCut{
-        {
-            Index:        1,
-            DurationSec:  6,
-            AudioCue:     "intro pulse begins",
-            VisualPrompt: "a protagonist walks through neon rain",
-            Seed:         42,
-        },
-    },
-}
+## 🏗️ Architecture
 
-result, err := runner.Run(ctx, orchestrator.VideoRequestFromCut(recipe.Cuts[0], ""))
+詳細は [`docs/architecture.md`](docs/architecture.md) を参照してください。
+
+### Flow
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant Recipe as Recipe Loader
+    participant Timeline as Timeline Normalizer
+    participant Keyframe as Keyframe Runner
+    participant Video as Video Runner
+    participant Publish as Metadata Publisher
+
+    App->>Recipe: Load creative brief or recipe
+    Recipe->>Timeline: Normalize sections/cuts
+    Timeline->>Keyframe: Prepare keyframe references
+    Keyframe->>Video: Submit cut request
+    Video-->>Timeline: Return video output reference
+    Timeline->>Video: Submit next cut with previous reference
+    Timeline->>Publish: Save updated recipe metadata
 ```
 
-## What Is Intentionally Not Included
+### Boundary Design
 
-This public sample does not include:
+公開 API は、安定したドメイン概念だけを扱います。
 
-- production video API adapters
-- provider-specific request payloads
-- production prompt templates
-- deployment configuration
-- cloud project names or bucket paths
-- authentication/session implementation
-- queue worker implementation
-- proprietary retry, chaining, or publishing strategy
+* `VideoRecipe`
+* `VideoCut`
+* `VideoRequest`
+* `VideoResponse`
+* `VideoRunner`
+* `MetadataPublisher`
 
-## License
+実際の動画生成 API に必要な認証、HTTP payload、polling、rate limit、storage、retry policy は、別 adapter または private package に隔離する想定です。
 
-Choose a license intentionally before publishing. If the goal is portfolio visibility only, avoid permissive licensing for proprietary production code. This sample can use MIT or Apache-2.0 if it contains no private implementation details.
+### Resume Strategy
+
+生成状態は `CutStatus` で表現します。
+
+* `pending`: まだ生成が必要なカット
+* `generated`: 生成済みのためスキップ可能なカット
+* `failed`: アプリケーション側の方針に従って再試行するカット
+
+このリポジトリはフィールドと境界を定義するのみで、本番用の queue、retry、resume 実装は含みません。
+
+---
+
+## 📂 プロジェクト構造 (Project Structure)
+
+```text
+ai-video-timeline-orchestrator/
+├── docs/
+│   └── architecture.md          # Provider-neutral な生成フローと境界設計
+├── examples/
+│   └── recipe.example.json      # 音楽・ストーリー起点のサンプルレシピ
+├── pkg/
+│   └── orchestrator/
+│       ├── interfaces.go        # VideoRunner / MetadataPublisher
+│       ├── mock_runner.go       # 外部APIなしで動く deterministic runner
+│       ├── mock_runner_test.go  # Mock runner と request mapping のテスト
+│       └── types.go             # Recipe / Cut / Request / Response の型定義
+├── go.mod
+├── LICENSE
+└── README.md
+```
+
+---
+
+## 🤝 依存関係 (Dependencies)
+
+この公開サンプルは、Go 標準ライブラリのみで動作します。
+
+* [Go 1.22+](https://golang.org/)
+* `context` - request lifecycle / cancellation
+* `fmt` - mock response generation
+* `testing` - package tests
+
+本番 adapter を追加する場合は、利用する動画生成 API、storage、queue、observability、secret management に応じて依存関係を private package 側に追加してください。
+
+---
+
+## 🧪 Test
+
+```bash
+go test ./...
+```
+
+---
+
+## 🚫 含めていないもの (Not Included)
+
+この public sample には、以下を意図的に含めていません。
+
+* production video API adapters
+* provider-specific request payloads
+* production prompt templates
+* deployment configuration
+* cloud project names or bucket paths
+* authentication/session implementation
+* queue worker implementation
+* proprietary retry, chaining, or publishing strategy
+
+---
+
+## 📜 ライセンス (License)
+
+このプロジェクトは [MIT License](LICENSE) の下で公開されています。
