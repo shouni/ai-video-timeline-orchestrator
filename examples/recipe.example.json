@@ -1,0 +1,24 @@
+{
+  "title": "Neon Rain",
+  "theme": "finding clarity in a noisy city",
+  "mood": "cinematic synthwave, emotional, luminous",
+  "tempo_bpm": 120,
+  "cuts": [
+    {
+      "index": 1,
+      "duration_sec": 6,
+      "audio_cue": "soft synth pulse begins at the intro",
+      "visual_prompt": "a lone protagonist walks through reflective neon rain, close-up on determined eyes",
+      "character_id": "main",
+      "seed": 42
+    },
+    {
+      "index": 2,
+      "duration_sec": 6,
+      "audio_cue": "drums enter with a stronger rhythm",
+      "visual_prompt": "the camera pulls back to reveal a glowing city bridge and fast-moving light trails",
+      "character_id": "main",
+      "seed": 42
+    }
+  ]
+}
