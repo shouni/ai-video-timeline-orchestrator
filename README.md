@@ -1,7 +1,7 @@
 # 🎬 AI Video Timeline Orchestrator
 
 [![Language](https://img.shields.io/badge/Language-Go-blue)](https://golang.org/)
-[![Go Version](https://img.shields.io/badge/Go-1.22-00ADD8)](https://golang.org/)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/shouni/ai-video-timeline-orchestrator)](https://golang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/Status-Reference%20Implementation-brightgreen)](#)
 
