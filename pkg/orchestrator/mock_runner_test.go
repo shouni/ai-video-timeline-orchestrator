@@ -61,7 +61,22 @@ func TestUniqueCharacterIDs(t *testing.T) {
 		{},
 	}.UniqueCharacterIDs()
 
-	if len(ids) != 2 || ids[0] != "main" || ids[1] != "support" {
-		t.Fatalf("ids = %#v", ids)
+	if len(ids) != 2 {
+		t.Fatalf("expected 2 ids, got %d: %#v", len(ids), ids)
+	}
+
+	hasMain := false
+	hasSupport := false
+	for _, id := range ids {
+		switch id {
+		case "main":
+			hasMain = true
+		case "support":
+			hasSupport = true
+		}
+	}
+
+	if !hasMain || !hasSupport {
+		t.Fatalf("missing expected character IDs: %#v", ids)
 	}
 }

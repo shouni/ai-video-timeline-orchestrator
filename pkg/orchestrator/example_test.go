@@ -21,8 +21,9 @@ func TestExampleRecipeLoadsAndNormalizes(t *testing.T) {
 
 	recipe.Normalize()
 
-	if recipe.ProjectTitle == "" || recipe.Title == "" {
-		t.Fatalf("titles were not normalized: project=%q title=%q", recipe.ProjectTitle, recipe.Title)
+	expectedTitle := "Neon Rain"
+	if recipe.ProjectTitle != expectedTitle || recipe.Title != expectedTitle {
+		t.Fatalf("titles were not normalized correctly: expected %q, got project=%q title=%q", expectedTitle, recipe.ProjectTitle, recipe.Title)
 	}
 	if recipe.MusicRecipe.Tempo != recipe.Tempo {
 		t.Fatalf("MusicRecipe.Tempo = %d, Tempo = %d", recipe.MusicRecipe.Tempo, recipe.Tempo)
