@@ -1,25 +1,25 @@
-# 🏗️ Architecture - Provider-neutral AI Video Timeline Orchestration
+# 🏗️ Architecture - go-veo-orchestrator Showcase
 
-**AI Video Timeline Orchestrator** の architecture は、音楽・ストーリー起点の creative recipe を、AI動画生成バックエンドへ安全に渡せる timeline request に変換することを目的にしています。
+**AI Video Timeline Orchestrator** は、[`github.com/shouni/go-veo-orchestrator`](https://github.com/shouni/go-veo-orchestrator) の workflow library を紹介するための showcase です。
 
-このドキュメントでは、公開リポジトリに含めるべき安定した境界と、private implementation に残すべき provider-specific な責務を分離して整理します。
+このドキュメントでは、showcase 側が独自の workflow interface を作らず、`go-veo-orchestrator/ports` と一致した境界を使う前提で整理します。
 
 ---
 
 ## 🚀 設計方針 (Design Goals)
 
 * **🎼 Recipe First**:
-  * 入力は `VideoRecipe` として扱い、title、theme、mood、tempo、cut-level prompt を provider-neutral な形で保持します。
+  * 入力は `ports.VideoRecipe` として扱い、`music_recipe`、`sections`、`cuts` を同じ JSON に保持します。
 * **🎞️ Cut-Based Execution**:
-  * 動画全体を一括生成するのではなく、`VideoCut` 単位で request を作り、生成結果を metadata に反映します。
-* **🔁 Continuity by Reference**:
-  * 直前の `GeneratedVideoRef` を次の `PreviousVideoRef` として渡し、カット間の連続性を adapter 側で利用できるようにします。
-* **🧩 Adapter Boundary**:
-  * 本番の動画生成 API、polling、storage、認証、rate limit は `VideoRunner` の実装へ隔離します。
+  * 動画全体を一括生成せず、`ports.Cut` 単位で `ports.VideoGenerationRequest` を作り、生成結果を cut metadata に戻します。
+* **🔁 Continuity by VideoID**:
+  * 直前の `VideoID` を次の `PreviousVideoID` として渡し、Veo の Video-to-Video 文脈を adapter 側で利用できるようにします。
+* **🧩 Upstream Ports Boundary**:
+  * `pkg/orchestrator` は `go-veo-orchestrator/ports` の型 alias です。型・フィールド・interface を showcase 側で再定義しません。
 * **🧭 Resumable Workflow**:
-  * 各カットに `pending` / `generated` / `failed` を持たせ、途中停止後の resume や retry をアプリケーション側で構成できるようにします。
+  * `pending` / `generated` / `failed` と `video_id` / `video_url` によって途中停止後の resume や retry を構成できます。
 * **🛡️ Public-Safe Surface**:
-  * production prompt、API payload、cloud resource name、secret、queue worker、独自 retry policy は公開 API に含めません。
+  * production prompt、API payload、cloud resource name、secret、queue worker、独自 retry policy はこの showcase に含めません。
 
 ---
 
@@ -28,103 +28,135 @@
 ```mermaid
 sequenceDiagram
     participant App as Application
-    participant Recipe as Recipe Loader
-    participant Timeline as Timeline Normalizer
-    participant Keyframe as Keyframe Runner
-    participant Video as Video Runner
-    participant Publish as Metadata Publisher
+    participant Recipe as ports.VideoRecipe
+    participant Keyframe as CutKeyframeRunner
+    participant Video as VideoRunner
+    participant Publish as VideoPublishRunner
 
-    App->>Recipe: Load creative brief or recipe
-    Recipe->>Timeline: Normalize sections/cuts
-    Timeline->>Keyframe: Prepare keyframe references
-    Keyframe->>Video: Submit cut request
-    Video-->>Timeline: Return video output reference
-    Timeline->>Video: Submit next cut with previous reference
-    Timeline->>Publish: Save updated recipe metadata
+    App->>Recipe: Load Music Recipe + cuts
+    Recipe->>Recipe: Normalize sections/cuts
+    Recipe->>Keyframe: Prepare keyframes
+    Keyframe->>Video: Submit VideoGenerationRequest
+    Video-->>Recipe: Return VideoID / CloudURL
+    Recipe->>Video: Submit next cut with PreviousVideoID
+    Recipe->>Publish: Save video_music_meta.json
 ```
 
 ### Step Details
 
 1. `Application` が creative brief または serialized recipe を読み込みます。
-2. `Recipe Loader` が `VideoRecipe` として title、theme、mood、tempo、cuts を復元します。
-3. `Timeline Normalizer` が sections や cuts を、生成しやすい順序付き timeline に整えます。
-4. `Keyframe Runner` が必要に応じて `KeyframeReference` を作成または添付します。
-5. `Video Runner` が `VideoRequest` を受け取り、provider-specific な動画生成処理を実行します。
-6. `Timeline` は `VideoResponse` から `GeneratedVideoRef` / `GeneratedVideoURL` を更新します。
-7. 次の cut には前 cut の `GeneratedVideoRef` を `PreviousVideoRef` として渡します。
-8. `Metadata Publisher` が更新済みの `VideoRecipe` を保存します。
+2. `VideoRecipe.Normalize()` が title、music recipe、sections、cuts、timeline を補完します。
+3. `CutKeyframeRunner` が必要に応じて `KeyframeReference` を作成または添付します。
+4. `VideoRunner` が `VideoGenerationRequest` を受け取り、provider-specific な動画生成処理を実行します。
+5. `VideoResponse` から `VideoID` / `CloudURL` を `Cut.VideoID` / `Cut.VideoURL` へ反映します。
+6. 次の cut には前 cut の `VideoID` を `PreviousVideoID` として渡します。
+7. `VideoPublishRunner` が更新済みの `VideoRecipe` を `video_music_meta.json` として保存します。
 
 ---
 
 ## 🧭 Public Boundary
 
-公開 API は、長期的に安定しやすい domain concept のみを扱います。
+この showcase の public boundary は `go-veo-orchestrator/ports` です。
 
 ```go
 type VideoRunner interface {
-    Run(ctx context.Context, req VideoRequest) (*VideoResponse, error)
+    Run(ctx context.Context, req VideoGenerationRequest) (*VideoResponse, error)
 }
 
-type MetadataPublisher interface {
-    Publish(ctx context.Context, recipe VideoRecipe) error
+type VideoTimelineRunner interface {
+    Run(ctx context.Context, recipe *VideoRecipe) ([]*VideoResponse, error)
+    RunAndSave(ctx context.Context, recipe *VideoRecipe, outputPath string) (*VideoPlotResponse, error)
+}
+
+type VideoPublishRunner interface {
+    Run(ctx context.Context, recipe *VideoRecipe, outputDir string) (*PublishResult, error)
+    BuildMetadata(recipe *VideoRecipe) ([]byte, error)
 }
 ```
 
 ### Public Models
 
-* `VideoRecipe`: 動画全体の creative recipe
-* `VideoCut`: 1つの timeline segment
-* `VideoRequest`: provider adapter に渡す生成 request
-* `VideoResponse`: provider adapter から返す生成 result
-* `VideoRunner`: 動画生成 backend の adapter interface
-* `MetadataPublisher`: recipe metadata の保存 interface
+* `VideoRecipe`: Music Recipe と動画 cuts を保持する recipe
+* `Cut`: 1つの timeline segment
+* `VideoGenerationRequest`: Veo adapter に渡すマルチモーダル request
+* `VideoResponse`: 生成動画の `VideoID` / `CloudURL` などの metadata
+* `VideoRunner`: 1 cut の動画生成 backend adapter interface
+* `CutKeyframeRunner`: cut keyframe 生成 workflow
+* `VideoPublishRunner`: metadata publish workflow
 
-### Private / Adapter Responsibilities
+### Facade Package
 
-以下は公開 API には含めず、private package または別 adapter package に隔離します。
+`pkg/orchestrator` は以下のように `ports` を alias します。
 
-* provider-specific HTTP request / response payload
-* authentication and token refresh
-* polling and operation state management
-* storage upload / signed URL generation
-* prompt template expansion
-* rate limit and quota handling
-* retry / backoff / dead-letter policy
-* queue worker and deployment configuration
-* cloud project ID, bucket path, secret name
+```go
+type VideoRecipe = ports.VideoRecipe
+type Cut = ports.Cut
+type VideoGenerationRequest = ports.VideoGenerationRequest
+type VideoResponse = ports.VideoResponse
+type VideoRunner = ports.VideoRunner
+type Config = ports.Config
+```
+
+このため `pkg/orchestrator.VideoRecipe` は `ports.VideoRecipe` と Go の型として同一です。
 
 ---
 
 ## 🎞️ Timeline Model
 
-`VideoRecipe` は、音楽・ストーリー起点の動画構成を provider-neutral に表現します。
+`VideoRecipe` は upstream の `ports.VideoRecipe` と一致します。
 
 ```go
 type VideoRecipe struct {
-    Title    string     `json:"title"`
-    Theme    string     `json:"theme,omitempty"`
-    Mood     string     `json:"mood,omitempty"`
-    TempoBPM int        `json:"tempo_bpm,omitempty"`
-    Cuts     []VideoCut `json:"cuts"`
+    ProjectTitle string      `json:"project_title"`
+    Title        string      `json:"title,omitempty"`
+    Theme        string      `json:"theme,omitempty"`
+    Mood         string      `json:"mood,omitempty"`
+    Tempo        int         `json:"tempo,omitempty"`
+    Instruments  []string    `json:"instruments,omitempty"`
+    Sections     []Section   `json:"sections,omitempty"`
+    Lyrics       *Lyrics     `json:"lyrics,omitempty"`
+    AudioModel   string      `json:"audio_model,omitempty"`
+    ComposeMode  string      `json:"compose_mode,omitempty"`
+    Seed         int64       `json:"seed,omitempty"`
+    Description  string      `json:"description,omitempty"`
+    MusicRecipe  MusicRecipe `json:"music_recipe"`
+    Cuts         []Cut       `json:"cuts"`
 }
 ```
 
-`VideoCut` は、生成単位として扱う最小の timeline segment です。
+`Cut` は生成単位として扱う最小の timeline segment です。
 
 ```go
-type VideoCut struct {
-    Index             int       `json:"index"`
+type Cut struct {
+    CutIndex          int       `json:"cut_index"`
     DurationSec       float64   `json:"duration_sec"`
-    AudioCue          string    `json:"audio_cue,omitempty"`
+    AudioCue          string    `json:"audio_cue"`
     AudioReference    string    `json:"audio_reference,omitempty"`
-    VisualPrompt      string    `json:"visual_prompt"`
+    VisualAnchor      string    `json:"visual_anchor"`
+    CharacterID       string    `json:"character_id"`
+    Dialogue          string    `json:"dialogue,omitempty"`
     KeyframeReference string    `json:"keyframe_reference,omitempty"`
-    CharacterID       string    `json:"character_id,omitempty"`
-    Seed              uint32    `json:"seed,omitempty"`
-    PreviousVideoRef  string    `json:"previous_video_ref,omitempty"`
-    GeneratedVideoRef string    `json:"generated_video_ref,omitempty"`
-    GeneratedVideoURL string    `json:"generated_video_url,omitempty"`
+    VideoURL          string    `json:"video_url,omitempty"`
+    VideoID           string    `json:"video_id,omitempty"`
     Status            CutStatus `json:"status,omitempty"`
+    StartSec          float64   `json:"start_sec,omitempty"`
+    EndSec            float64   `json:"end_sec,omitempty"`
+}
+```
+
+`VideoGenerationRequest` は adapter に渡す入力です。
+
+```go
+type VideoGenerationRequest struct {
+    Prompt          string
+    ImageReference  string
+    AudioReference  string
+    InputImage      []byte
+    InputAudio      []byte
+    PreviousVideoID string
+    Seed            int64
+    CutIndex        int
+    DurationSec     float64
 }
 ```
 
@@ -132,19 +164,20 @@ type VideoCut struct {
 
 ## 🔁 Continuity Strategy
 
-カット間の連続性は、provider-specific な詳細ではなく reference chaining として表現します。
+カット間の連続性は `PreviousVideoID` で表現します。
 
 ```go
-req := orchestrator.VideoRequestFromCut(cut, previousVideoRef)
+req := orchestrator.VideoGenerationRequest{
+    Prompt:          cut.VisualAnchor,
+    ImageReference:  cut.KeyframeReference,
+    AudioReference:  cut.AudioReference,
+    PreviousVideoID: lastVideoID,
+    CutIndex:        cut.CutIndex,
+    DurationSec:     cut.DurationSec,
+}
 ```
 
-`previousVideoRef` が指定されている場合は、それを優先して `VideoRequest.PreviousVideoRef` に設定します。指定がない場合は、`VideoCut.PreviousVideoRef` を fallback として使います。
-
-この設計により、呼び出し側は以下を選べます。
-
-* recipe に保存済みの previous reference を使う
-* 実行中に得た直前の generated reference を明示的に渡す
-* adapter 側で reference を provider-specific input に変換する
+`VideoRunner` が返した `VideoResponse.VideoID` は、次 cut の `PreviousVideoID` として渡します。
 
 ---
 
@@ -163,35 +196,44 @@ const (
 ### Status Meaning
 
 * `pending`: まだ生成が必要な cut
-* `generated`: 生成済みで、`GeneratedVideoRef` または `GeneratedVideoURL` を利用できる cut
+* `generated`: 生成済みで、`VideoID` と `VideoURL` を利用できる cut
 * `failed`: 失敗済みで、アプリケーション側の retry policy に従って再処理する cut
 
 ### Resume Example
 
 ```go
-previousRef := ""
+lastVideoID := ""
 
-for i, cut := range recipe.Cuts {
-    if cut.Status == orchestrator.CutStatusGenerated {
-        previousRef = cut.GeneratedVideoRef
+for i := range recipe.Cuts {
+    cut := &recipe.Cuts[i]
+    if cut.IsGenerated() {
+        lastVideoID = cut.VideoID
         continue
     }
 
-    req := orchestrator.VideoRequestFromCut(cut, previousRef)
+    req := orchestrator.VideoGenerationRequest{
+        Prompt:          cut.VisualAnchor,
+        ImageReference:  cut.KeyframeReference,
+        AudioReference:  cut.AudioReference,
+        PreviousVideoID: lastVideoID,
+        CutIndex:        cut.CutIndex,
+        DurationSec:     cut.DurationSec,
+    }
+
     res, err := runner.Run(ctx, req)
     if err != nil {
-        recipe.Cuts[i].Status = orchestrator.CutStatusFailed
+        cut.Status = orchestrator.CutStatusFailed
         continue
     }
 
-    recipe.Cuts[i].GeneratedVideoRef = res.VideoRef
-    recipe.Cuts[i].GeneratedVideoURL = res.VideoURL
-    recipe.Cuts[i].Status = orchestrator.CutStatusGenerated
-    previousRef = res.VideoRef
+    cut.VideoID = res.VideoID
+    cut.VideoURL = res.CloudURL
+    cut.Status = orchestrator.CutStatusGenerated
+    lastVideoID = res.VideoID
 }
 ```
 
-この public sample は status field を定義しますが、retry 回数、backoff、dead-letter queue、partial failure recovery は規定しません。
+この showcase は status field を使ったメタデータ表現を示しますが、retry 回数、backoff、dead-letter queue、partial failure recovery は規定しません。
 
 ---
 
@@ -204,7 +246,7 @@ type ProviderVideoRunner struct {
     // client, storage, logger, retry policy, and configuration live here.
 }
 
-func (r *ProviderVideoRunner) Run(ctx context.Context, req orchestrator.VideoRequest) (*orchestrator.VideoResponse, error) {
+func (r *ProviderVideoRunner) Run(ctx context.Context, req orchestrator.VideoGenerationRequest) (*orchestrator.VideoResponse, error) {
     // 1. Convert provider-neutral request into provider-specific payload.
     // 2. Submit generation request.
     // 3. Poll or wait for completion.
@@ -218,9 +260,8 @@ adapter は以下の変換責務を持ちます。
 
 * `Prompt` を provider-specific prompt field へ変換
 * `DurationSec` を対応する duration parameter へ変換
-* `AudioReference` / `KeyframeReference` / `PreviousVideoRef` を provider input asset として解決
-* provider operation ID を `ProviderOperation` に保持
-* public metadata に載せられる `VideoRef` / `VideoURL` へ正規化
+* `ImageReference` / `AudioReference` / `PreviousVideoID` を provider input asset として解決
+* public metadata に載せられる `VideoID` / `CloudURL` へ正規化
 
 ---
 
@@ -231,7 +272,7 @@ adapter は以下の変換責務を持ちます。
 * 特定 provider の API payload を公開すること
 * production prompt template を公開すること
 * cloud storage や queue の実装を固定すること
-* retry policy をライブラリ側で強制すること
+* retry policy を showcase 側で強制すること
 * 認証・認可・secret management を public package に持ち込むこと
 * 動画生成品質そのものを保証すること
 
@@ -241,8 +282,7 @@ adapter は以下の変換責務を持ちます。
 
 ```text
 docs/architecture.md          # この設計ドキュメント
-examples/recipe.example.json  # creative recipe の最小例
-pkg/orchestrator/interfaces.go
-pkg/orchestrator/types.go
+examples/recipe.example.json  # ports.VideoRecipe の最小例
+pkg/orchestrator/types.go     # go-veo-orchestrator/ports の型 alias
 pkg/orchestrator/mock_runner.go
 ```
