@@ -1,24 +1,57 @@
 {
+  "project_title": "Neon Rain",
   "title": "Neon Rain",
   "theme": "finding clarity in a noisy city",
   "mood": "cinematic synthwave, emotional, luminous",
-  "tempo_bpm": 120,
+  "tempo": 120,
+  "instruments": [
+    "analog synth",
+    "electronic drums",
+    "soft piano"
+  ],
+  "music_recipe": {
+    "title": "Neon Rain",
+    "theme": "finding clarity in a noisy city",
+    "mood": "cinematic synthwave, emotional, luminous",
+    "tempo": 120,
+    "instruments": [
+      "analog synth",
+      "electronic drums",
+      "soft piano"
+    ],
+    "sections": [
+      {
+        "name": "Intro",
+        "duration": 6,
+        "prompt": "soft synth pulse begins at the intro"
+      },
+      {
+        "name": "Verse",
+        "duration": 6,
+        "prompt": "drums enter with a stronger rhythm"
+      }
+    ]
+  },
   "cuts": [
     {
-      "index": 1,
+      "cut_index": 1,
       "duration_sec": 6,
       "audio_cue": "soft synth pulse begins at the intro",
-      "visual_prompt": "a lone protagonist walks through reflective neon rain, close-up on determined eyes",
+      "visual_anchor": "a lone protagonist walks through reflective neon rain, close-up on determined eyes",
       "character_id": "main",
-      "seed": 42
+      "status": "pending",
+      "start_sec": 0,
+      "end_sec": 6
     },
     {
-      "index": 2,
+      "cut_index": 2,
       "duration_sec": 6,
       "audio_cue": "drums enter with a stronger rhythm",
-      "visual_prompt": "the camera pulls back to reveal a glowing city bridge and fast-moving light trails",
+      "visual_anchor": "the camera pulls back to reveal a glowing city bridge and fast-moving light trails",
       "character_id": "main",
-      "seed": 42
+      "status": "pending",
+      "start_sec": 6,
+      "end_sec": 12
     }
   ]
 }
