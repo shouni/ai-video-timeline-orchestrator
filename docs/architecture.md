@@ -45,7 +45,7 @@ sequenceDiagram
 ### Step Details
 
 1. `Application` が creative brief または serialized recipe を読み込みます。
-2. `VideoRecipe.Normalize()` が title、music recipe、sections、cuts、timeline を補完します。
+2. `VideoRecipe.Normalize()` が project title、music recipe、cuts、timeline を補完します。`cuts` が空の場合は `music_recipe.sections` から生成します。
 3. `CutKeyframeRunner` が必要に応じて `KeyframeReference` を作成または添付します。
 4. `VideoRunner` が `VideoGenerationRequest` を受け取り、provider-specific な動画生成処理を実行します。
 5. `VideoResponse` から `VideoID` / `CloudURL` を `Cut.VideoID` / `Cut.VideoURL` へ反映します。
@@ -107,22 +107,14 @@ type Config = ports.Config
 
 ```go
 type VideoRecipe struct {
-    ProjectTitle string      `json:"project_title"`
-    Title        string      `json:"title,omitempty"`
-    Theme        string      `json:"theme,omitempty"`
-    Mood         string      `json:"mood,omitempty"`
-    Tempo        int         `json:"tempo,omitempty"`
-    Instruments  []string    `json:"instruments,omitempty"`
-    Sections     []Section   `json:"sections,omitempty"`
-    Lyrics       *Lyrics     `json:"lyrics,omitempty"`
-    AudioModel   string      `json:"audio_model,omitempty"`
-    ComposeMode  string      `json:"compose_mode,omitempty"`
-    Seed         int64       `json:"seed,omitempty"`
+    ProjectTitle string      `json:"project_title,omitempty"`
     Description  string      `json:"description,omitempty"`
     MusicRecipe  MusicRecipe `json:"music_recipe"`
     Cuts         []Cut       `json:"cuts"`
 }
 ```
+
+音楽側の `title`、`theme`、`mood`、`tempo`、`sections` は `MusicRecipe` に集約します。`ProjectTitle` が空なら `MusicRecipe.Title`、`MusicRecipe.Title` が空なら `ProjectTitle` が fallback として補完されます。
 
 `Cut` は生成単位として扱う最小の timeline segment です。
 
