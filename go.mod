@@ -2,7 +2,7 @@ module github.com/shouni/ai-video-timeline-orchestrator
 
 go 1.26
 
-require github.com/shouni/go-veo-orchestrator v1.1.1
+require github.com/shouni/go-veo-orchestrator v1.1.3
 
 require (
 	cloud.google.com/go v0.123.0 // indirect

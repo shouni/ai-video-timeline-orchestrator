@@ -22,11 +22,11 @@ func TestExampleRecipeLoadsAndNormalizes(t *testing.T) {
 	recipe.Normalize()
 
 	expectedTitle := "Neon Rain"
-	if recipe.ProjectTitle != expectedTitle || recipe.Title != expectedTitle {
-		t.Fatalf("titles were not normalized correctly: expected %q, got project=%q title=%q", expectedTitle, recipe.ProjectTitle, recipe.Title)
+	if recipe.ProjectTitle != expectedTitle || recipe.MusicRecipe.Title != expectedTitle {
+		t.Fatalf("titles were not normalized correctly: expected %q, got project=%q music=%q", expectedTitle, recipe.ProjectTitle, recipe.MusicRecipe.Title)
 	}
-	if recipe.MusicRecipe.Tempo != recipe.Tempo {
-		t.Fatalf("MusicRecipe.Tempo = %d, Tempo = %d", recipe.MusicRecipe.Tempo, recipe.Tempo)
+	if recipe.MusicRecipe.Tempo != 120 {
+		t.Fatalf("MusicRecipe.Tempo = %d", recipe.MusicRecipe.Tempo)
 	}
 	if len(recipe.Cuts) != 2 {
 		t.Fatalf("len(Cuts) = %d", len(recipe.Cuts))

@@ -11,12 +11,17 @@
 
 この repo では production adapter や秘匿プロンプトを持たず、`go-veo-orchestrator/ports` の公開インターフェイスをそのまま使って、Music Recipe から Veo 向けのカット生成タイムラインへつなぐ設計を説明します。
 
+### Documentation
+
+* [Architecture](docs/architecture.md): `go-veo-orchestrator/ports` と一致させている境界、`VideoRecipe` / `Cut` / runner interfaces、生成フローの詳細。
+* [Example Recipe](examples/recipe.example.json): `ports.VideoRecipe` として読み込める `music_recipe` + `cuts` の最小サンプル。
+
 ---
 
 ## ✨ 主な特徴 (Features)
 
 * **🎼 Music Recipe Driven Timeline**:
-  * `ports.VideoRecipe` の `music_recipe`、`sections`、`cuts` をもとに、音楽展開と映像カットを同じメタデータで扱います。
+  * `ports.VideoRecipe` の `music_recipe.sections` と `cuts` をもとに、音楽展開と映像カットを同じメタデータで扱います。
 * **🎞️ Cut-Based Video Workflow**:
   * 各 `ports.Cut` は `duration_sec`、`audio_cue`、`visual_anchor`、`keyframe_reference`、`video_id`、`video_url` を保持します。
 * **🔁 Continuity Chaining**:
@@ -54,19 +59,22 @@ type Config = ports.Config
 ```go
 type VideoRecipe struct {
     ProjectTitle string
-    Title        string
-    Theme        string
-    Mood         string
-    Tempo        int
-    Instruments  []string
-    Sections     []Section
-    Lyrics       *Lyrics
-    AudioModel   string
-    ComposeMode  string
-    Seed         int64
     Description  string
     MusicRecipe  MusicRecipe
     Cuts         []Cut
+}
+
+type MusicRecipe struct {
+    Title       string
+    Theme       string
+    Mood        string
+    Tempo       int
+    Instruments []string
+    Sections    []Section
+    Lyrics      *Lyrics
+    AudioModel  string
+    ComposeMode string
+    Seed        int64
 }
 
 type Cut struct {
@@ -175,15 +183,19 @@ for i := range recipe.Cuts {
 ```json
 {
   "project_title": "Neon Rain",
-  "title": "Neon Rain",
-  "theme": "finding clarity in a noisy city",
-  "mood": "cinematic synthwave, emotional, luminous",
-  "tempo": 120,
+  "description": "finding clarity in a noisy city",
   "music_recipe": {
     "title": "Neon Rain",
     "theme": "finding clarity in a noisy city",
     "mood": "cinematic synthwave, emotional, luminous",
-    "tempo": 120
+    "tempo": 120,
+    "sections": [
+      {
+        "name": "Intro",
+        "duration": 6,
+        "prompt": "soft synth pulse begins at the intro"
+      }
+    ]
   },
   "cuts": [
     {
@@ -215,7 +227,7 @@ sequenceDiagram
     participant Publish as VideoPublishRunner
 
     App->>Recipe: Load Music Recipe + cuts
-    Recipe->>Recipe: Normalize sections/cuts
+    Recipe->>Recipe: Normalize music_recipe.sections/cuts
     Recipe->>Keyframe: Prepare keyframes
     Keyframe->>Video: Submit VideoGenerationRequest
     Video-->>Recipe: Return VideoID / CloudURL

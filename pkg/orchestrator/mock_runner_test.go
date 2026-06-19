@@ -23,14 +23,16 @@ func TestMockVideoRunner(t *testing.T) {
 	}
 }
 
-func TestNormalizeExpandsSectionsAndSyncsAliases(t *testing.T) {
+func TestNormalizeExpandsMusicRecipeSections(t *testing.T) {
 	recipe := VideoRecipe{
-		Title: "Section Driven",
-		Mood:  "cinematic",
-		Tempo: 120,
-		Sections: []Section{
-			{Name: "Intro", Duration: 5, Prompt: "quiet synth pad"},
-			{Name: "Chorus", Duration: 7, Prompt: "bright synth lead"},
+		MusicRecipe: MusicRecipe{
+			Title: "Section Driven",
+			Mood:  "cinematic",
+			Tempo: 120,
+			Sections: []Section{
+				{Name: "Intro", Duration: 5, Prompt: "quiet synth pad"},
+				{Name: "Chorus", Duration: 7, Prompt: "bright synth lead"},
+			},
 		},
 	}
 

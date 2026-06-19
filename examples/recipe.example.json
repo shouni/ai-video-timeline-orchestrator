@@ -1,14 +1,6 @@
 {
   "project_title": "Neon Rain",
-  "title": "Neon Rain",
-  "theme": "finding clarity in a noisy city",
-  "mood": "cinematic synthwave, emotional, luminous",
-  "tempo": 120,
-  "instruments": [
-    "analog synth",
-    "electronic drums",
-    "soft piano"
-  ],
+  "description": "finding clarity in a noisy city",
   "music_recipe": {
     "title": "Neon Rain",
     "theme": "finding clarity in a noisy city",
