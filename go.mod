@@ -2,7 +2,7 @@ module github.com/shouni/ai-video-timeline-orchestrator
 
 go 1.26
 
-require github.com/shouni/go-veo-orchestrator v1.1.3
+require github.com/shouni/go-veo-orchestrator v1.1.6
 
 require (
 	cloud.google.com/go v0.123.0 // indirect
@@ -22,9 +22,9 @@ require (
 	github.com/ikawaha/kagome-dict/ipa v1.2.6 // indirect
 	github.com/ikawaha/kagome/v2 v2.11.0 // indirect
 	github.com/shouni/audio v1.0.19 // indirect
-	github.com/shouni/gemini-image-kit v1.7.4 // indirect
+	github.com/shouni/gemini-image-kit v1.7.5 // indirect
 	github.com/shouni/go-character-kit v1.0.2 // indirect
-	github.com/shouni/go-gemini-client v1.6.0 // indirect
+	github.com/shouni/go-gemini-client v1.6.1 // indirect
 	github.com/shouni/netarmor v1.0.3 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.67.0 // indirect
