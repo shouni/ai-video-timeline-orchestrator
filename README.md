@@ -96,9 +96,12 @@ type Cut struct {
 type VideoGenerationRequest struct {
     Prompt          string
     ImageReference  string
+    // ReferenceImages は複数の参照画像 GCS URI（最大3枚）。セット時は ImageReference より優先。
+    ReferenceImages []string
     AudioReference  string
     InputImage      []byte
     InputAudio      []byte
+    // PreviousVideoID は前カットの Video-to-Video 文脈維持用。VeoUsePreviousVideo 有効時のみ使用。
     PreviousVideoID string
     Seed            int64
     CutIndex        int
